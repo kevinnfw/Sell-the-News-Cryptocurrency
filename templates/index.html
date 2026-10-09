@@ -1,0 +1,402 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Sell-the-News Detector</title>
+<script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+body {margin:0;padding:0;font-family:'Poppins',sans-serif;background:#0b0d17;color:#e6edf3;}
+.container {display:flex;height:100vh;width:100%;}
+.panel-left {width:400px;background:#161b22;padding:20px;box-shadow:2px 0 10px #00ff9d33;display:flex;flex-direction:column;overflow-y:auto;}
+.panel-right {flex:1;padding:20px;display:flex;flex-direction:column;position:relative;}
+form label {display:block;margin-top:15px;font-weight:bold;font-size:14px;}
+form textarea, form select, form input {width:100%;margin-top:8px;padding:10px;border:none;border-radius:6px;font-size:14px;background:#21262d;color:#e6edf3;}
+form button {margin-top:20px;width:100%;padding:12px;border:none;border-radius:6px;background:#00ff9d;color:#000;font-weight:bold;cursor:pointer;transition:0.2s;}
+form button:hover {background:#00e68a;}
+#result {margin-top:15px;background:#161b22;padding:15px;border-radius:8px;box-shadow:0 0 10px #00ff9d33;display:none;}
+#result strong {color:#00ff9d;}
+.badge-status {display:inline-block;padding:4px 10px;border-radius:6px;font-weight:bold;font-size:13px;margin-top:6px;}
+.badge-green {background:#28a745;color:#fff;}
+.badge-red {background:#dc3545;color:#fff;}
+.badge-yellow {background:#ffc107;color:#000;}
+.badge-gray {background:#6c757d;color:#fff;}
+.badge-blue {background:#007bff;color:#fff;}
+#chart-div {flex:1;min-height:400px;background:#0b0d17;position:relative;}
+#chart-overlay {position:absolute;top:0;left:0;right:0;bottom:0;background:rgba(11,13,23,0.6);display:none;align-items:center;justify-content:center;z-index:10;}
+#chart-overlay div {border:5px solid #f3f3f3;border-top:5px solid #00ff9d;border-radius:50%;width:50px;height:50px;animation:spin 1s linear infinite;}
+@keyframes spin {0%{transform:rotate(0deg);}100%{transform:rotate(360deg);} }
+.tabs {display:flex;margin-top:15px;border-bottom:1px solid #00ff9d33;}
+.tab {flex:1;text-align:center;padding:8px 0;cursor:pointer;font-weight:bold;background:#161b22;}
+.tab.active {background:#00ff9d;color:#000;}
+.tab-content {display:none;margin-top:10px;}
+.tab-content.active {display:block;}
+footer {text-align:center;font-size:12px;color:#8b949e;margin-top:10px;}
+.news-item {border-bottom:1px solid #00ff9d33;padding:6px 0;}
+.news-item a {color:#00ff9d;text-decoration:none;}
+.news-item a:hover {text-decoration:underline;}
+.news-item small {color:#8b949e;display:block;}
+#stn-notif {display:none;padding:10px;border-radius:6px;margin-top:10px;font-weight:bold;}
+.percentile-box {background:#21262d;padding:10px;border-radius:6px;margin-top:10px;}
+.percentile-box p {margin:4px 0;color:#e6edf3;}
+.percentile-box strong {color:#00ff9d;}
+.stn-box {background:#1a232b;padding:10px;border-radius:6px;margin-top:10px;border:1px solid #00ff9d22;}
+.stn-box p {margin:4px 0;color:#e6edf3;}
+.stn-status {font-weight:bold;}
+.small {color:#ffb86b;}
+.big {color:#ff6b6b;}
+.note {font-size:12px;color:#8b949e;margin-top:6px;}
+</style>
+</head>
+<body>
+
+<div class="container">
+    <div class="panel-left">
+        <h2>🧠 Sell the News Detector</h2>
+
+        <div class="tabs">
+            <div class="tab active" data-tab="predict-tab">Deteksi</div>
+            <div class="tab" data-tab="dashboard-tab">Dashboard</div>
+        </div>
+
+        <!-- DETEKSI TAB -->
+        <div class="tab-content active" id="predict-tab">
+            <form id="predict-form">
+                <label for="coin">Koin</label>
+                <select id="coin" name="coin" required>
+                    <option value="">-- Pilih Koin --</option>
+                    <option value="BTCUSDT">BTC / USDT</option>
+                    <option value="ETHUSDT">ETH / USDT</option>
+                    <option value="BNBUSDT">BNB / USDT</option>
+                    <option value="DOGEUSDT">DOGE / USDT</option>
+                    <option value="SOLUSDT">SOL / USDT</option>
+                    <option value="XRPUSDT">XRP / USDT</option>
+                    <option value="ADAUSDT">ADA / USDT</option>
+                    <option value="GIGGLEUSDT">GIGGLE / USDT</option>
+                </select>
+
+                <label for="exchange">Exchange</label>
+                <select id="exchange" name="exchange">
+                    <option value="Binance">Binance</option>
+                    <option value="OKX">OKX</option>
+                </select>
+
+                <label for="window">Window (menit)</label>
+                <input type="number" id="window" name="window" value="10" min="1" max="43200" required>
+
+                <label for="chart_interval">Interval Chart</label>
+                <select id="chart_interval" name="chart_interval">
+                    <option value="1m">1 Menit</option>
+                    <option value="3m">3 Menit</option>
+                    <option value="5m">5 Menit</option>
+                    <option value="15m">15 Menit</option>
+                    <option value="30m">30 Menit</option>
+                    <option value="1h">1 Jam</option>
+                    <option value="4h">4 Jam</option>
+                    <option value="1d">1 Hari</option>
+                </select>
+
+                <button type="submit">Deteksi</button>
+            </form>
+
+            <div id="result">
+                <strong>📊 Hasil Deteksi</strong>
+                <div id="result-text"></div>
+                <div id="status-badge"></div>
+                <div id="rf-result" style="margin-top:8px;font-weight:bold;"></div>
+
+                <!-- STN indicator di tab Deteksi -->
+                <div class="stn-box" id="stn-box">
+                    <p><strong>⚠️ Sell the News Indicator</strong></p>
+                    <p>p90 (Pump) : <strong id="det_p90">-</strong></p>
+                    <p>p10 (Dump) : <strong id="det_p10">-</strong></p>
+                    <p>Current change : <strong id="det_change">-</strong> %</p>
+                    <p>Est. Sentiment (pos vs neg) : <strong id="det_sent_est">-</strong></p>
+                    <p class="stn-status" id="det_stn_status">Status: <span style="color:#6c757d">-</span></p>
+                    <p class="note">Keterangan: STN Small = change &lt; 0 AND sentiment positif AND change &gt; p10. STN Big = change &le; p10 AND sentiment positif.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- DASHBOARD TAB -->
+        <div class="tab-content" id="dashboard-tab">
+            <h3>📈 Trend Sentimen / Heatmap</h3>
+            <canvas id="sentiment-chart" height="200"></canvas>
+
+            <h3>⚡ Ringkasan Dashboard</h3>
+            <div id="dashboard-summary"></div>
+
+            <h3>📊 Percentiles (Pump/Dump)</h3>
+            <div class="percentile-box">
+                <p>Latest Price: <strong id="latest_price">-</strong></p>
+                <p>p90 (Pump): <strong id="p90">-</strong></p>
+                <p>p10 (Dump): <strong id="p10">-</strong></p>
+                <p>Current Change: <strong id="latest_change">-</strong></p>
+            </div>
+
+            <div id="stn-notif"></div>
+
+            <button id="download-data">Download CSV</button>
+
+            <h3>📰 Berita Terbaru Kripto</h3>
+            <div id="latest-news" style="max-height:200px;overflow-y:auto;background:#161b22;padding:10px;border-radius:6px;">
+            </div>
+        </div>
+    </div>
+
+    <!-- PANEL KANAN -->
+    <div class="panel-right">
+        <div id="chart-div"></div>
+        <div id="chart-overlay"><div></div></div>
+    </div>
+</div>
+
+<footer>
+Project: Sell-the-News Detector — Integrasi Binance/OKX | ML + Sentiment Trend + Pump & Dump Alert
+</footer>
+
+<script>
+// Spinner
+function showSpinner(){document.getElementById('chart-overlay').style.display='flex';}
+function hideSpinner(){document.getElementById('chart-overlay').style.display='none';}
+
+// TAB SWITCH
+document.querySelectorAll('.tab').forEach(tab=>{
+    tab.addEventListener('click', ()=>{
+        document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+        document.querySelectorAll('.tab-content').forEach(c=>c.classList.remove('active'));
+        tab.classList.add('active');
+        document.getElementById(tab.dataset.tab).classList.add('active');
+    });
+});
+
+// RENDER CANDLE
+function renderCandlestickChart(candles, stn=false){
+    if(!candles || candles.length===0) return;
+    let shapes=[];
+    if(stn){
+        shapes.push({type:'rect',xref:'paper',yref:'paper',x0:0,x1:1,y0:0,y1:1,fillcolor:'rgba(255,0,0,0.05)',line:{width:0}});
+    }
+    const trace={
+        x:candles.map(c=>new Date(c.time)),
+        open:candles.map(c=>c.open),
+        high:candles.map(c=>c.high),
+        low:candles.map(c=>c.low),
+        close:candles.map(c=>c.close),
+        increasing:{line:{color:'lime',width:1.5}},
+        decreasing:{line:{color:'red',width:2}},
+        type:'candlestick'
+    };
+    const layout={
+        dragmode:'zoom',
+        margin:{r:10,t:25,b:40,l:60},
+        showlegend:false,
+        xaxis:{rangeslider:{visible:false},color:'#e6edf3'},
+        yaxis:{color:'#e6edf3'},
+        paper_bgcolor:'#0b0d17',
+        plot_bgcolor:'#0b0d17',
+        shapes:shapes
+    };
+    Plotly.newPlot('chart-div',[trace],layout,{displayModeBar:true,responsive:true});
+}
+
+// Compute STN logic (uses percentiles + estimate sentiment from news counts)
+function computeSTNFromData(changePercent, p10, posCount, negCount) {
+    // estimate sentiment boolean: use pos > neg as proxy (UI-only)
+    const total = (posCount||0) + (negCount||0);
+    const sentimentScore = total>0 ? (posCount - negCount) / total : 0;
+    const sentimentPositive = sentimentScore > 0; // proxy for polarity > 0
+    // Conditions (as in app.py label_from_row):
+    // Sell the News Small: c < 0 and sentiment > 0.03 and c > p10
+    // Sell the News Big: c <= p10 and sentiment > 0.03
+    // We don't have TextBlob polarity exact in /predict response, so use sentimentScore proxy.
+    const stnSmall = (changePercent < 0) && sentimentPositive && (changePercent > p10);
+    const stnBig = (changePercent <= p10) && sentimentPositive;
+    return { sentimentScore, sentimentPositive, stnSmall, stnBig };
+}
+
+// FETCH DETECTION
+async function fetchDetection(showLoading=false){
+    const params=new URLSearchParams();
+    params.append("coin", document.getElementById('coin').value);
+    params.append("exchange", document.getElementById('exchange').value);
+    params.append("window", document.getElementById('window').value);
+    params.append("chart_interval", document.getElementById('chart_interval').value);
+    if(showLoading) showSpinner();
+
+    try {
+        const res = await fetch('/predict', {
+            method:'POST',
+            headers:{'Content-Type':'application/x-www-form-urlencoded'},
+            body:params
+        });
+
+        const data = await res.json();
+        if(showLoading) hideSpinner();
+        if(!data || !data.coin) return;
+
+        // Badge status utama + Random Forest digabung
+        const statusBadge = document.getElementById('status-badge');
+        let badgeClass = "badge-gray";
+        if(String(data.prediction).startsWith("Pump")) badgeClass="badge-green";
+        else if(String(data.prediction).startsWith("Dump")) badgeClass="badge-red";
+        else if(String(data.prediction).startsWith("Sell the News")) badgeClass="badge-red";
+        else if(String(data.prediction).startsWith("Volatile")) badgeClass="badge-yellow";
+
+        let rfLabel = data.rf_label ? `RF: ${data.rf_label}` : '';
+        statusBadge.innerHTML = `<div class="badge-status ${badgeClass}">${data.prediction} ${rfLabel}</div>`;
+
+        // RF detail
+        const rfDiv=document.getElementById("rf-result");
+        rfDiv.innerText=data.rf_prediction || "";
+        rfDiv.style.color=data.rf_color || "#00bfff";
+
+        // Result text
+        document.getElementById('result-text').innerHTML=`
+            <strong>Koin:</strong> ${data.coin}<br>
+            <strong>Exchange:</strong> ${data.exchange}<br>
+            <strong>Window:</strong> ${data.window} menit<br>
+            <strong>Harga Lalu:</strong> ${data.old_price} USDT<br>
+            <strong>Harga Sekarang:</strong> ${data.latest_price} USDT<br>
+            <strong>Perubahan:</strong> ${data.change}%<br>
+        `;
+        document.getElementById('result').style.display='block';
+
+        // Render chart
+        renderCandlestickChart(data.candles, String(data.prediction).startsWith("Sell the News"));
+
+        // Sentiment chart
+        if(data.sentiment_trend && data.sentiment_trend.length>0){
+            const pos=data.sentiment_trend[0].positive || 0;
+            const neg=data.sentiment_trend[0].negative || 0;
+            const neu=data.sentiment_trend[0].neutral || 0;
+            const ctx=document.getElementById('sentiment-chart').getContext('2d');
+            if(window.sentimentChart) window.sentimentChart.destroy();
+            window.sentimentChart=new Chart(ctx,{
+                type:'bar',
+                data:{
+                    labels:['Positif','Negatif','Netral'],
+                    datasets:[{label:'Jumlah Berita',data:[pos,neg,neu]}]
+                },
+                options:{
+                    plugins:{legend:{display:false}},
+                    scales:{y:{beginAtZero:true,ticks:{color:'#e6edf3'}},x:{ticks:{color:'#e6edf3'}}}
+                }
+            });
+        }
+
+        // Dashboard summary
+        if(data.summary){
+            const s=data.summary;
+            document.getElementById('dashboard-summary').innerHTML=`
+                <p>% Berita Positif: ${s.positive || 0}%</p>
+                <p>% Berita Negatif: ${s.negative || 0}%</p>
+                <p>Status Pasar: ${s.pump_dump || '-'}</p>
+                <p>Koin Paling Volatile: ${s.most_volatile || '-'}</p>
+                <p style="color:#00bfff;"><strong>🔵 Random Forest:</strong> ${data.rf_prediction || '-'}</p>
+            `;
+        }
+
+        // Latest news
+        if(Array.isArray(data.historical_news) && data.historical_news.length>0){
+            const newsDiv=document.getElementById('latest-news');
+            newsDiv.innerHTML="";
+            data.historical_news.forEach(n=>{
+                const item=document.createElement('div');
+                item.className='news-item';
+                item.innerHTML=`<a href="${n.url}" target="_blank">${n.title}</a>
+                    <small>${n.source} — ${n.published_at} | <span style="color:#00ff9d;">${n.sentiment}</span></small>`;
+                newsDiv.appendChild(item);
+            });
+        }
+
+        // Update percentile + compute STN logic
+        const coinParam = encodeURIComponent(data.coin);
+        const intervalParam = encodeURIComponent(document.getElementById('chart_interval').value || '1m');
+        fetch(`/percentiles?coin=${coinParam}&interval=${intervalParam}`)
+            .then(res=>res.json())
+            .then(pdata=>{
+                if(!pdata.error){
+                    // Update dashboard percentile box
+                    document.getElementById('latest_price').innerText=pdata.latest_price;
+                    document.getElementById('p90').innerText=pdata.p90;
+                    document.getElementById('p10').innerText=pdata.p10;
+                    document.getElementById('latest_change').innerText=pdata.latest_change;
+
+                    // Also update DETEKTAB STN box values
+                    document.getElementById('det_p90').innerText=pdata.p90;
+                    document.getElementById('det_p10').innerText=pdata.p10;
+                    // use the change reported by /predict as it's the window-change used by app.py
+                    const changeNow = Number(data.change) || Number(pdata.latest_change) || 0;
+                    document.getElementById('det_change').innerText=changeNow.toFixed(4);
+
+                    // Estimate sentiment from summary or sentiment_trend:
+                    let posCount=0, negCount=0;
+                    if(data.sentiment_trend && data.sentiment_trend.length>0){
+                        posCount = data.sentiment_trend[0].positive || 0;
+                        negCount = data.sentiment_trend[0].negative || 0;
+                    } else if(data.summary){
+                        // fallback estimate: map percentages to counts (not exact, just UI-friendly)
+                        posCount = data.summary.positive || 0;
+                        negCount = data.summary.negative || 0;
+                    }
+                    const estSentText = `${posCount} positive / ${negCount} negative`;
+                    document.getElementById('det_sent_est').innerText = estSentText;
+
+                    // compute STN using proxy logic
+                    const p10val = Number(pdata.p10) || 0;
+                    const compute = computeSTNFromData(Number(changeNow), p10val, posCount, negCount);
+
+                    const statusElem = document.getElementById('det_stn_status');
+                    if(compute.stnBig){
+                        statusElem.innerHTML = 'Status: <span class="big">Sell the News (Big)</span>';
+                    } else if(compute.stnSmall){
+                        statusElem.innerHTML = 'Status: <span class="small">Sell the News (Small)</span>';
+                    } else {
+                        // not STN — show possible "how close" hint
+                        let hint = 'Not triggered';
+                        // give hint if change is negative and sentiment positive but not beyond thresholds
+                        if(compute.sentimentPositive && changeNow < 0 && changeNow > p10val){
+                            hint = 'Near STN Small (sentiment positive, change negative but above p10)';
+                        } else if(compute.sentimentPositive && changeNow <= p10val){
+                            hint = 'Near STN Big (sentiment positive, change <= p10)'; // although this would be STN Big - but kept for clarity
+                        } else if(!compute.sentimentPositive){
+                            hint = 'No STN: sentiment not clearly positive';
+                        }
+                        statusElem.innerHTML = `Status: <span style="color:#6c757d">${hint}</span>`;
+                    }
+                }
+            })
+            .catch(err=>{
+                // ignore percentile fetch error for now
+                console.error("percentiles fetch error", err);
+            });
+
+    } catch (err){
+        if(showLoading) hideSpinner();
+        console.error("Error fetchDetection:", err);
+    }
+}
+
+// form submit
+document.getElementById('predict-form').addEventListener('submit',function(e){e.preventDefault();fetchDetection(true);});
+
+// download CSV
+document.getElementById('download-data').addEventListener('click',()=>{
+    fetch('/download_csv').then(res=>res.blob()).then(blob=>{
+        const url=window.URL.createObjectURL(blob);
+        const a=document.createElement('a');
+        a.href=url;a.download='historical_data.csv';
+        document.body.appendChild(a);a.click();a.remove();
+        window.URL.revokeObjectURL(url);
+    });
+});
+
+// Auto-refresh every 5s
+setInterval(()=>{fetchDetection(false);},5000);
+// initial
+fetchDetection(false);
+</script>
+</body>
+</html>

@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>📊 Crypto Detector (Dataset CSV)</title>
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<style>
+    body {
+        font-family: 'Poppins', sans-serif;
+        margin: 0;
+        padding: 0;
+        background: #f5f5f5;
+    }
+    .container {
+        max-width: 1000px;
+        margin: 40px auto;
+        background: #fff;
+        padding: 25px 30px;
+        border-radius: 12px;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+    }
+    h1 {
+        text-align: center;
+        margin-bottom: 10px;
+    }
+    h2 {
+        margin-top: 30px;
+        color: #222;
+    }
+    select, button {
+        padding: 8px 12px;
+        margin: 5px;
+        font-size: 15px;
+        border-radius: 5px;
+        border: 1px solid #aaa;
+    }
+    button {
+        background: #007bff;
+        color: white;
+        border: none;
+        cursor: pointer;
+        transition: 0.3s;
+    }
+    button:hover {
+        background: #0056b3;
+    }
+    .status {
+        font-weight: bold;
+        font-size: 18px;
+        margin-top: 15px;
+        padding: 10px;
+        background: #eef3f7;
+        border-radius: 8px;
+    }
+    .status span {
+        padding: 3px 8px;
+        border-radius: 5px;
+    }
+    .trend-box {
+        background: #f8fafc;
+        border-left: 5px solid #007bff;
+        padding: 10px 15px;
+        margin-top: 10px;
+        border-radius: 8px;
+        font-size: 14px;
+        color: #333;
+    }
+    table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 20px;
+        font-size: 14px;
+    }
+    th, td {
+        border: 1px solid #ddd;
+        padding: 8px;
+        text-align: center;
+    }
+    th {
+        background: #333;
+        color: #fff;
+    }
+    tr:nth-child(even) {
+        background-color: #f2f2f2;
+    }
+    .footer {
+        text-align: center;
+        font-size: 13px;
+        color: #777;
+        margin-top: 25px;
+    }
+    #loading {
+        display: none;
+        font-size: 15px;
+        color: #007bff;
+        font-weight: 500;
+    }
+</style>
+</head>
+
+<body>
+<div class="container">
+    <h1>📊 Crypto Detector (Dataset CSV)</h1>
+    <p style="text-align:center;color:#555;">
+        Deteksi pola Pump, Dump, atau Sell the News berdasarkan dataset & model Random Forest (Percentile + EWMA Z-score Analisis Tren).
+    </p>
+
+    <div style="text-align:center;">
+        <label for="coin"><strong>Pilih Koin:</strong></label>
+        <select id="coin">
+            <option value="">-- Pilih Koin --</option>
+            {% for c in coins %}
+                <option value="{{c}}">{{c}}</option>
+            {% endfor %}
+        </select>
+        <button id="detectBtn">🚀 Deteksi</button>
+        <p id="loading">🔍 Menganalisis data... mohon tunggu</p>
+    </div>
+
+    <div class="status">
+        <p>Random Forest Status: <span id="rfStatus">-</span></p>
+    </div>
+
+    <!-- Box tambahan untuk menampilkan hasil EWMA & Z-score -->
+    <div class="trend-box" id="trendBox" style="display:none;">
+        <h3 style="margin:5px 0 10px;">📈 Analisis Tren (EWMA & Z-score)</h3>
+        <p>Rata-rata Z-score Change (10 data terakhir): <b id="zChange">-</b></p>
+        <p>Rata-rata Z-score Volatility (10 data terakhir): <b id="zVol">-</b></p>
+        <p>EWMA Change terakhir: <b id="ewmaChange">-</b></p>
+        <p>EWMA Volatility terakhir: <b id="ewmaVol">-</b></p>
+    </div>
+
+    <h2>📰 Berita & Dataset Terbaru</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>Timestamp</th>
+                <th>Koin</th>
+                <th>Change</th>
+                <th>Volatility</th>
+                <th>Sentiment</th>
+                <th>Volume</th>
+                <th>RF Label</th>
+            </tr>
+        </thead>
+        <tbody id="newsTable">
+            <tr><td colspan="7">Pilih koin dan klik "Deteksi" untuk menampilkan data.</td></tr>
+        </tbody>
+    </table>
+
+    <div class="footer">
+        <p>💡 Model menggunakan Percentile + EWMA Z-score Analysis dan Random Forest Classifier | by <b>Crypto Detector</b></p>
+    </div>
+</div>
+
+<script>
+$(document).ready(function() {
+    $("#detectBtn").click(function() {
+        var coin = $("#coin").val();
+        if (!coin) {
+            alert("⚠️ Pilih koin terlebih dahulu!");
+            return;
+        }
+
+        $("#loading").show();
+        $("#rfStatus").text("-");
+        $("#newsTable").html("<tr><td colspan='7'>Memuat data...</td></tr>");
+        $("#trendBox").hide();
+
+        $.post("/detect", { coin: coin }, function(data) {
+            $("#loading").hide();
+            $("#rfStatus").text(data.rf_status);
+
+            // Tampilkan analisis tren jika tersedia
+            if (data.trend_analysis) {
+                $("#trendBox").show();
+                $("#zChange").text(data.trend_analysis.avg_z_change);
+                $("#zVol").text(data.trend_analysis.avg_z_volatility);
+                $("#ewmaChange").text(data.trend_analysis.ewma_change_last);
+                $("#ewmaVol").text(data.trend_analysis.ewma_volatility_last);
+            }
+
+            let news_html = "";
+            if (data.latest_news.length > 0) {
+                data.latest_news.forEach(function(n) {
+                    news_html += "<tr>";
+                    news_html += "<td>" + (n.timestamp || '-') + "</td>";
+                    news_html += "<td>" + (n.cryptocurrency || '-') + "</td>";
+                    news_html += "<td>" + (n.change ? n.change.toFixed(4) : '-') + "</td>";
+                    news_html += "<td>" + (n.volatility ? n.volatility.toFixed(4) : '-') + "</td>";
+                    news_html += "<td>" + (n.sentiment ? n.sentiment.toFixed(4) : '-') + "</td>";
+                    news_html += "<td>" + (n.volume ? n.volume.toFixed(4) : '-') + "</td>";
+                    news_html += "<td style='color:" + n.rf_color + "'><b>" + n.rf_label + "</b></td>";
+                    news_html += "</tr>";
+                });
+            } else {
+                news_html = "<tr><td colspan='7'>Tidak ada data atau berita terbaru.</td></tr>";
+            }
+
+            $("#newsTable").html(news_html);
+        }).fail(function() {
+            $("#loading").hide();
+            alert("❌ Terjadi kesalahan saat mengambil data dari server.");
+        });
+    });
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>📊 Crypto Detector (Dataset CSV)</title>
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<style>
+    body { font-family: Arial, sans-serif; margin: 20px; background:#f5f5f5; }
+    h1 { text-align: center; }
+    .container { max-width: 900px; margin: auto; background: #fff; padding: 20px; border-radius: 10px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
+    select, button { padding: 8px; margin: 5px; font-size: 16px; }
+    table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+    th, td { border: 1px solid #ddd; padding: 8px; text-align: center; }
+    th { background: #333; color: #fff; }
+    tr:nth-child(even){background-color: #f2f2f2;}
+    .status { font-weight: bold; font-size: 18px; margin-top: 10px; }
+</style>
+</head>
+<body>
+<div class="container">
+    <h1>📊 Crypto Detector (Dataset CSV)</h1>
+
+    <label for="coin">Pilih Koin:</label>
+    <select id="coin">
+        <option value="">-- Pilih Koin --</option>
+        {% for c in coins %}
+            <option value="{{c}}">{{c}}</option>
+        {% endfor %}
+    </select>
+    <button id="detectBtn">Deteksi</button>
+
+    <div class="status">
+    <p>Random Forest Status: <span id="rfStatus">-</span></p>
+    </div>
+
+
+    <h2>📰 Berita Terbaru</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>Timestamp</th>
+                <th>Koin</th>
+                <th>Sentiment</th>
+                <th>News</th>
+                <th>RF Label</th>
+            </tr>
+        </thead>
+        <tbody id="newsTable">
+            <tr><td colspan="5">Pilih koin dan klik Deteksi.</td></tr>
+        </tbody>
+    </table>
+</div>
+
+<script>
+$(document).ready(function(){
+    $("#detectBtn").click(function(){
+        var coin = $("#coin").val();
+        if(!coin){
+            alert("Pilih koin terlebih dahulu!");
+            return;
+        }
+
+        $.post("/detect", {coin: coin}, function(data){
+            $("#rfStatus").text(data.rf_status);
+
+            var news_html = "";
+            if(data.latest_news.length > 0){
+                data.latest_news.forEach(function(n){
+                    news_html += "<tr>";
+                    news_html += "<td>"+n.timestamp+"</td>";
+                    news_html += "<td>"+n.cryptocurrency+"</td>";
+                    news_html += "<td>"+n.sentiment.toFixed(4)+"</td>";
+                    news_html += "<td>"+n.news+"</td>";
+                    news_html += "<td style='color:"+n.rf_color+"'>"+n.rf_label+"</td>";
+                    news_html += "</tr>";
+                });
+            } else {
+                news_html = "<tr><td colspan='5'>Tidak ada berita terbaru.</td></tr>";
+            }
+            $("#newsTable").html(news_html);
+        });
+    });
+});
+</script>
+</body>
+</html>

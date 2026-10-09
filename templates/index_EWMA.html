@@ -1,0 +1,592 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1.0" />
+<title>Sell-the-News Detector Zscore & EWMA</title>
+<script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<style>
+body {
+  margin:0;
+  padding:0;
+  font-family:'Poppins',sans-serif;
+  background:#0b0d17;
+  color:#e6edf3;
+}
+
+.container {
+  display:flex;
+  height:100vh;
+  width:100%;
+}
+
+.panel-left {
+  width:400px;
+  background:#161b22;
+  padding:20px;
+  box-shadow:2px 0 10px #00ff9d33;
+  display:flex;
+  flex-direction:column;
+  overflow-y:auto;
+}
+
+.panel-right {
+  flex:1;
+  padding:20px;
+  display:flex;
+  flex-direction:column;
+  position:relative;
+}
+
+form label {
+  display:block;
+  margin-top:15px;
+  font-weight:bold;
+  font-size:14px;
+}
+
+form select,
+form input {
+  width:100%;
+  margin-top:8px;
+  padding:10px;
+  border:none;
+  border-radius:6px;
+  font-size:14px;
+  background:#21262d;
+  color:#e6edf3;
+  box-sizing:border-box;
+}
+
+form button {
+  margin-top:20px;
+  width:100%;
+  padding:12px;
+  border:none;
+  border-radius:6px;
+  background:#00ff9d;
+  color:#000;
+  font-weight:bold;
+  cursor:pointer;
+  transition:0.2s;
+}
+
+form button:hover {
+  background:#00e68a;
+}
+
+.download-btn {
+  display:block;
+  margin-top:15px;
+  width:100%;
+  padding:12px;
+  border:none;
+  border-radius:6px;
+  background:#00ff9d;
+  color:#000;
+  font-weight:bold;
+  text-align:center;
+  text-decoration:none;
+  cursor:pointer;
+  box-sizing:border-box;
+}
+
+.download-btn:hover {
+  background:#00e68a;
+}
+
+#result {
+  margin-top:15px;
+  background:#161b22;
+  padding:15px;
+  border-radius:8px;
+  box-shadow:0 0 10px #00ff9d33;
+  display:none;
+}
+
+#result strong {
+  color:#00ff9d;
+}
+
+.badge-status {
+  display:inline-block;
+  padding:4px 10px;
+  border-radius:6px;
+  font-weight:bold;
+  font-size:13px;
+  margin-top:6px;
+}
+
+.badge-green {
+  background:#28a745;
+  color:#fff;
+}
+
+.badge-red {
+  background:#dc3545;
+  color:#fff;
+}
+
+.badge-yellow {
+  background:#ffc107;
+  color:#000;
+}
+
+.badge-gray {
+  background:#6c757d;
+  color:#fff;
+}
+
+#chart-div {
+  flex:1;
+  min-height:400px;
+  background:#0b0d17;
+  position:relative;
+}
+
+#chart-overlay {
+  position:absolute;
+  top:0;
+  left:0;
+  right:0;
+  bottom:0;
+  background:rgba(11,13,23,0.6);
+  display:none;
+  align-items:center;
+  justify-content:center;
+  z-index:10;
+}
+
+#chart-overlay div {
+  border:5px solid #f3f3f3;
+  border-top:5px solid #00ff9d;
+  border-radius:50%;
+  width:50px;
+  height:50px;
+  animation:spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% {transform:rotate(0deg);}
+  100% {transform:rotate(360deg);}
+}
+
+.tabs {
+  display:flex;
+  margin-top:15px;
+  border-bottom:1px solid #00ff9d33;
+}
+
+.tab {
+  flex:1;
+  text-align:center;
+  padding:8px 0;
+  cursor:pointer;
+  font-weight:bold;
+  background:#161b22;
+}
+
+.tab.active {
+  background:#00ff9d;
+  color:#000;
+}
+
+.tab-content {
+  display:none;
+  margin-top:10px;
+}
+
+.tab-content.active {
+  display:block;
+}
+
+footer {
+  text-align:center;
+  font-size:12px;
+  color:#8b949e;
+  margin-top:10px;
+}
+
+.news-item {
+  border-bottom:1px solid #00ff9d33;
+  padding:6px 0;
+}
+
+.news-item a {
+  color:#00ff9d;
+  text-decoration:none;
+}
+
+.news-item a:hover {
+  text-decoration:underline;
+}
+
+.news-item small {
+  color:#8b949e;
+  display:block;
+}
+
+.percentile-box,
+.stn-box {
+  background:#1a232b;
+  padding:10px;
+  border-radius:6px;
+  margin-top:10px;
+  border:1px solid #00ff9d22;
+}
+
+.percentile-box p,
+.stn-box p {
+  margin:4px 0;
+  color:#e6edf3;
+}
+
+.stn-status {
+  font-weight:bold;
+}
+
+.small {
+  color:#ffb86b;
+}
+
+.big {
+  color:#ff6b6b;
+}
+
+.note {
+  font-size:12px;
+  color:#8b949e;
+  margin-top:6px;
+}
+</style>
+</head>
+
+<body>
+
+<div class="container">
+  <div class="panel-left">
+    <h2>🧠 Sell the News Detector</h2>
+
+    <div class="tabs">
+      <div class="tab active" data-tab="predict-tab">Deteksi</div>
+      <div class="tab" data-tab="dashboard-tab">Dashboard</div>
+    </div>
+
+    <!-- DETEKSI -->
+    <div class="tab-content active" id="predict-tab">
+      <form id="predict-form">
+        <label for="coin">Koin</label>
+        <select id="coin" required>
+          <option value="">-- Pilih Koin --</option>
+          <option value="BTCUSDT">BTC / USDT</option>
+          <option value="ETHUSDT">ETH / USDT</option>
+          <option value="BNBUSDT">BNB / USDT</option>
+          <option value="DOGEUSDT">DOGE / USDT</option>
+          <option value="SOLUSDT">SOL / USDT</option>
+          <option value="XRPUSDT">XRP / USDT</option>
+          <option value="ADAUSDT">ADA / USDT</option>
+        </select>
+
+        <label for="exchange">Exchange</label>
+        <select id="exchange">
+          <option value="Binance">Binance</option>
+        </select>
+
+        <label for="window">Window (menit)</label>
+        <input type="number" id="window" value="10" min="1" max="43200" required>
+
+        <label for="chart_interval">Interval Chart</label>
+        <select id="chart_interval">
+          <option value="1m">1 Menit</option>
+          <option value="5m">5 Menit</option>
+          <option value="15m">15 Menit</option>
+          <option value="1h">1 Jam</option>
+          <option value="4h">4 Jam</option>
+          <option value="1d">1 Hari</option>
+        </select>
+
+        <button type="submit">Deteksi</button>
+      </form>
+
+      <div id="result">
+        <strong>📊 Hasil Deteksi</strong>
+        <div id="result-text"></div>
+        <div id="status-badge"></div>
+        <div id="rf-result" style="margin-top:8px;font-weight:bold;"></div>
+
+        <div class="stn-box" id="stn-box">
+          <p><strong>⚠️ Sell the News Indicator (Z-score)</strong></p>
+          <p>Z-score Change: <strong id="z_change">-</strong></p>
+          <p>EWMA (avg trend): <strong id="ewma">-</strong></p>
+          <p>Threshold ±Z: <strong id="z_thresh">±2.0</strong></p>
+          <p>Change(%): <strong id="det_change">-</strong></p>
+          <p>Est. Sentiment: <strong id="det_sent_est">-</strong></p>
+          <p class="stn-status" id="det_stn_status">Status: <span style="color:#6c757d">-</span></p>
+          <p class="note">STN Small = Z &lt; 0, Sentimen Positif, Z &gt; -2. STN Big = Z ≤ -2 dan Sentimen Positif.</p>
+        </div>
+      </div>
+
+      <h3>📈 Trend Sentimen</h3>
+      <canvas id="sentiment-chart" height="200"></canvas>
+    </div>
+
+    <!-- DASHBOARD -->
+    <div class="tab-content" id="dashboard-tab">
+      <h3>⚡ Ringkasan Dashboard</h3>
+      <div id="dashboard-summary"></div>
+
+      <h3>📊 Z-score & EWMA</h3>
+      <div class="percentile-box">
+        <p>Latest Price: <strong id="latest_price">-</strong></p>
+        <p>Z-score: <strong id="z_score">-</strong></p>
+        <p>EWMA: <strong id="ewma_dash">-</strong></p>
+        <p>Current Change: <strong id="latest_change">-</strong></p>
+      </div>
+
+      <h3>📰 Berita Terkini</h3>
+      <div id="latest-news" style="max-height:200px;overflow-y:auto;background:#161b22;padding:10px;border-radius:6px;"></div>
+
+      <a id="download-csv-btn" href="/download_csv?coin=BTCUSDT&interval=1m&window=10" class="download-btn">
+        ⬇ Download CSV Hasil Analisis
+      </a>
+    </div>
+  </div>
+
+  <div class="panel-right">
+    <div id="chart-div"></div>
+    <div id="chart-overlay"><div></div></div>
+  </div>
+</div>
+
+<footer>Project: Sell-the-News Detector — Z-score + EWMA + Random Forest</footer>
+
+<script>
+function showSpinner(){
+  document.getElementById('chart-overlay').style.display='flex';
+}
+
+function hideSpinner(){
+  document.getElementById('chart-overlay').style.display='none';
+}
+
+document.querySelectorAll('.tab').forEach(tab=>{
+  tab.addEventListener('click',()=>{
+    document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+    document.querySelectorAll('.tab-content').forEach(c=>c.classList.remove('active'));
+    tab.classList.add('active');
+    document.getElementById(tab.dataset.tab).classList.add('active');
+    updateDownloadCsvLink();
+  });
+});
+
+function updateDownloadCsvLink(){
+  const coin = document.getElementById('coin').value || 'BTCUSDT';
+  const interval = document.getElementById('chart_interval').value || '1m';
+  const windowVal = document.getElementById('window').value || 10;
+
+  const btn = document.getElementById('download-csv-btn');
+  if(btn){
+    btn.href = `/download_csv?coin=${encodeURIComponent(coin)}&interval=${encodeURIComponent(interval)}&window=${encodeURIComponent(windowVal)}`;
+  }
+}
+
+document.getElementById('coin').addEventListener('change', updateDownloadCsvLink);
+document.getElementById('chart_interval').addEventListener('change', updateDownloadCsvLink);
+document.getElementById('window').addEventListener('input', updateDownloadCsvLink);
+
+function msToDate(ms){
+  try {
+    return new Date(ms).toLocaleString();
+  } catch(e) {
+    return ms;
+  }
+}
+
+function renderCandlestickChart(candles){
+  const container = document.getElementById('chart-div');
+
+  if(!candles || candles.length === 0){
+    container.innerHTML = '<div style="padding:20px;color:#8b949e">No candle data</div>';
+    return;
+  }
+
+  const trace = {
+    x: candles.map(c=>new Date(c.time)),
+    open: candles.map(c=>c.open),
+    high: candles.map(c=>c.high),
+    low: candles.map(c=>c.low),
+    close: candles.map(c=>c.close),
+    type: 'candlestick',
+    increasing: {line:{color:'#00ff9d'}},
+    decreasing: {line:{color:'#ff6b6b'}}
+  };
+
+  const layout = {
+    margin:{r:10,t:25,b:40,l:60},
+    xaxis:{color:'#e6edf3'},
+    yaxis:{color:'#e6edf3'},
+    paper_bgcolor:'#0b0d17',
+    plot_bgcolor:'#0b0d17',
+    showlegend:false
+  };
+
+  Plotly.newPlot('chart-div',[trace],layout,{responsive:true});
+}
+
+async function fetchDetection(showLoading=false){
+  const coin = document.getElementById('coin').value || 'BTCUSDT';
+
+  const params = new URLSearchParams();
+  params.append("coin", coin);
+  params.append("exchange", document.getElementById('exchange').value);
+  params.append("window", document.getElementById('window').value);
+  params.append("chart_interval", document.getElementById('chart_interval').value);
+
+  updateDownloadCsvLink();
+
+  if(showLoading) showSpinner();
+
+  try{
+    const res = await fetch('/predict',{
+      method:'POST',
+      headers:{'Content-Type':'application/x-www-form-urlencoded'},
+      body:params
+    });
+
+    const data = await res.json();
+
+    if(showLoading) hideSpinner();
+
+    if(!data || !data.coin) return;
+
+    document.getElementById('result').style.display='block';
+    document.getElementById('result-text').innerHTML=`
+      <strong>Koin:</strong> ${data.coin}<br>
+      <strong>Exchange:</strong> ${data.exchange}<br>
+      <strong>Harga Lalu:</strong> ${data.old_price} USDT<br>
+      <strong>Harga Sekarang:</strong> ${data.latest_price} USDT<br>
+      <strong>Perubahan:</strong> ${data.change}%<br>
+    `;
+
+    const statusBadge = document.getElementById('status-badge');
+    let badgeClass = "badge-gray";
+    const pred = String(data.prediction || '').toLowerCase();
+
+    if(pred.includes("pump")) badgeClass = "badge-green";
+    else if(pred.includes("dump") || pred.includes("sell")) badgeClass = "badge-red";
+    else badgeClass = "badge-yellow";
+
+    statusBadge.innerHTML = `<div class="badge-status ${badgeClass}">${data.prediction} ${data.rf_prediction ? (' | RF: ' + data.rf_prediction) : ''}</div>`;
+
+    document.getElementById('rf-result').innerText = data.rf_prediction ? `RF: ${data.rf_prediction}` : '';
+
+    renderCandlestickChart(data.candles || []);
+
+    const trend = data.sentiment_trend || [];
+    const pos = trend.map(t=>t.positive || 0);
+    const neg = trend.map(t=>t.negative || 0);
+    const neu = trend.map(t=>t.neutral || 0);
+    const labels = trend.map((_,i)=>`T${i+1}`);
+    const ctx = document.getElementById('sentiment-chart').getContext('2d');
+
+    if(window.sentimentChart) window.sentimentChart.destroy();
+
+    window.sentimentChart = new Chart(ctx,{
+      type:'bar',
+      data:{
+        labels,
+        datasets:[
+          {label:'Positif',data:pos},
+          {label:'Negatif',data:neg},
+          {label:'Netral',data:neu}
+        ]
+      },
+      options:{
+        plugins:{legend:{display:true,labels:{color:'#e6edf3'}}},
+        scales:{
+          y:{beginAtZero:true,ticks:{color:'#e6edf3'}},
+          x:{ticks:{color:'#e6edf3'}}
+        }
+      }
+    });
+
+    if(data.summary){
+      const s = data.summary;
+      document.getElementById('dashboard-summary').innerHTML=`
+        <p>% Positif: ${s.positive || 0}%</p>
+        <p>% Negatif: ${s.negative || 0}%</p>
+        <p>Status Pasar: ${s.pump_dump || '-'}</p>
+        <p>Koin Volatile: ${s.most_volatile || '-'}</p>
+        <p>Random Forest: ${data.rf_prediction || '-'}</p>
+      `;
+    }
+
+    fetch(`/zscore?coin=${encodeURIComponent(data.coin)}&interval=${encodeURIComponent(document.getElementById('chart_interval').value)}`)
+      .then(r=>r.json())
+      .then(z=>{
+        if(!z || z.error) return;
+
+        document.getElementById('latest_price').innerText = Number(z.latest_price).toFixed(6);
+        document.getElementById('z_score').innerText = Number(z.z_score).toFixed(4);
+        document.getElementById('ewma').innerText = Number(z.ewma).toFixed(4);
+        document.getElementById('ewma_dash').innerText = Number(z.ewma).toFixed(4);
+        document.getElementById('latest_change').innerText = Number(z.change).toFixed(4);
+        document.getElementById('z_change').innerText = Number(z.z_score).toFixed(4);
+
+        const sentimentPositive = (z.sentiment || 0) > 0.03;
+        let status = 'Stable';
+
+        if(z.z_score <= -2 && sentimentPositive) status = 'Sell the News (Big)';
+        else if(z.z_score < 0 && z.z_score > -2 && sentimentPositive) status = 'Sell the News (Small)';
+        else if(z.z_score >= 2 && sentimentPositive) status = 'Pump 🚀';
+        else if(z.z_score <= -2 && !sentimentPositive) status = 'Dump 💥';
+
+        document.getElementById('det_change').innerText = Number(z.change).toFixed(4);
+        document.getElementById('det_sent_est').innerText = `${((z.sentiment || 0) * 100).toFixed(1)}% positif`;
+        document.getElementById('det_stn_status').innerHTML = `Status: <span style="color:#00ff9d">${status}</span>`;
+      })
+      .catch(()=>{});
+
+    const newsDiv = document.getElementById('latest-news');
+    newsDiv.innerHTML = "";
+
+    (data.historical_news || []).slice(0,30).forEach(n=>{
+      const d = document.createElement('div');
+      d.className = 'news-item';
+
+      const safeTitle = n.title ? n.title : '(no title)';
+      const url = n.url ? n.url : '#';
+
+      d.innerHTML = `
+        <a href="${url}" target="_blank" rel="noreferrer">${safeTitle}</a>
+        <small>${n.source || '-'} — ${n.published_at || '-'} | Sentimen: ${(n.sentiment || 0).toFixed(3)}</small>
+      `;
+
+      newsDiv.appendChild(d);
+    });
+
+    updateDownloadCsvLink();
+
+  }catch(e){
+    if(showLoading) hideSpinner();
+    console.error(e);
+  }
+}
+
+document.getElementById('predict-form').addEventListener('submit',e=>{
+  e.preventDefault();
+  fetchDetection(true);
+});
+
+setInterval(()=>{
+  if(document.getElementById('coin').value) fetchDetection(false);
+},5000);
+
+updateDownloadCsvLink();
+fetchDetection(false);
+</script>
+
+</body>
+</html>
